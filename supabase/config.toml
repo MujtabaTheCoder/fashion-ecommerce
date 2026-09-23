@@ -1,0 +1,9 @@
+# Minimal local CLI config. Generate a full file with `supabase init` if you run Supabase locally.
+
+project_id = "atelier-fashion"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
