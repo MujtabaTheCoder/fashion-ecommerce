@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Box, Sparkles, Layers, Shield, ArrowRight, Eye, ShoppingBag, Shirt } from "lucide-react";
+import { Eye, ShoppingBag, Shirt } from "lucide-react";
 import { Product3DViewer } from "@/components/3d/Product3DViewer";
 import { MOCK_PRODUCTS, type DetailedProduct } from "@/lib/data/mockProducts";
 import { useCart } from "@/lib/cart/CartContext";

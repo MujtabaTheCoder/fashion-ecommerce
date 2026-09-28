@@ -28,7 +28,7 @@ export default function AdminOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(params);
-  const { getOrderById, getOrderByNumber, updateOrderStatus, deleteOrder } = useOrders();
+  const { getOrderById, getOrderByNumber, updateOrderStatus } = useOrders();
 
   const order = getOrderById(resolvedParams.id) || getOrderByNumber(resolvedParams.id);
 
@@ -37,14 +37,6 @@ export default function AdminOrderDetailPage({
   const [noteInput, setNoteInput] = useState<string>("");
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Sync state if order changes
-  React.useEffect(() => {
-    if (order) {
-      setSelectedStatus(order.status);
-      setTrackingInput(order.trackingNumber || "");
-    }
-  }, [order]);
 
   if (!order) {
     return (
@@ -82,7 +74,11 @@ export default function AdminOrderDetailPage({
     setTimeout(() => setIsSavedToast(false), 3000);
   };
 
-  const STATUS_STEPS: Array<{ id: OrderStatus; label: string; icon: any }> = [
+  const STATUS_STEPS: Array<{
+    id: OrderStatus;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
     { id: "pending", label: "1. Pending", icon: Clock },
     { id: "processing", label: "2. Tailoring & Processing", icon: Scissors },
     { id: "dispatched", label: "3. Dispatched", icon: Package },

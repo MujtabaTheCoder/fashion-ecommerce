@@ -1,11 +1,31 @@
 import Link from "next/link";
-import { ArrowRight, Sparkles, Box, Scissors, ShieldCheck } from "lucide-react";
+import dynamic from "next/dynamic";
+import { ArrowRight, Sparkles, Scissors } from "lucide-react";
 import { Hero3DCanvas } from "@/components/3d/Hero3DCanvas";
 import { CategoryShowcase } from "@/components/home/CategoryShowcase";
-import { BespokeShirtStudio } from "@/components/home/BespokeShirtStudio";
 import { HomeProductSection } from "@/components/home/HomeProductSection";
-import { Atelier3DShowcase } from "@/components/home/Atelier3DShowcase";
 import { HomeEditorialAndTrust } from "@/components/home/HomeEditorialAndTrust";
+
+// Dynamic splitting for heavy 3D canvases below the fold
+const BespokeShirtStudio = dynamic(
+  () => import("@/components/home/BespokeShirtStudio").then((m) => m.BespokeShirtStudio),
+  {
+    loading: () => (
+      <div className="h-[600px] w-full animate-pulse bg-[#141311]/50 rounded-3xl my-12" />
+    ),
+  },
+);
+
+const Atelier3DShowcase = dynamic(
+  () => import("@/components/home/Atelier3DShowcase").then((m) => m.Atelier3DShowcase),
+  {
+    loading: () => (
+      <div className="h-[500px] w-full animate-pulse bg-[#11100e]/50 rounded-3xl my-12" />
+    ),
+  },
+);
+
+export const revalidate = 300; // Edge SWR cache 5 minutes
 
 export const metadata = {
   title: "ATELIER · 3D Luxury Fashion & Haute Outfits",

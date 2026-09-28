@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Sparkles, ShieldCheck, Truck, RefreshCw, Award, ArrowRight, Check } from "lucide-react";
-import confetti from "canvas-confetti";
 
 export function HomeEditorialAndTrust() {
   const [email, setEmail] = useState("");
@@ -14,16 +13,17 @@ export function HomeEditorialAndTrust() {
     e.preventDefault();
     if (email) {
       setSubscribed(true);
-      try {
-        confetti({
-          particleCount: 50,
-          spread: 70,
-          origin: { y: 0.8 },
-          colors: ["#dfb15b", "#1a1816"],
-        });
-      } catch {
-        // ignore
-      }
+      import("canvas-confetti")
+        .then((module) => {
+          const confetti = module.default ?? module;
+          confetti({
+            particleCount: 50,
+            spread: 70,
+            origin: { y: 0.8 },
+            colors: ["#dfb15b", "#1a1816"],
+          });
+        })
+        .catch(() => {});
     }
   };
 

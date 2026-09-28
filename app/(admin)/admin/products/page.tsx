@@ -375,7 +375,12 @@ export default function AdminProductsPage() {
                   <label className="font-semibold uppercase text-white/60">Category</label>
                   <select
                     value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value as any })}
+                    onChange={(e) =>
+                      setNewProduct({
+                        ...newProduct,
+                        category: e.target.value as "women" | "men" | "accessories" | "footwear",
+                      })
+                    }
                     className="mt-1 w-full rounded-xl border border-white/15 bg-black/60 px-3 py-2.5 text-white focus:outline-none"
                   >
                     <option value="women">Women Couture</option>

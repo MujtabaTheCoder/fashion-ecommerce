@@ -5,7 +5,6 @@ import * as THREE from "three";
 
 export function Hero3DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -144,11 +143,16 @@ export function Hero3DCanvas() {
 
     window.addEventListener("mousemove", handleMouseMove);
 
-    // Animation loop
-    let animationFrameId: number;
-    let clock = new THREE.Clock();
+    // Animation loop with Viewport & Tab Visibility Guards
+    let animationFrameId = 0;
+    let isVisible = true;
+    const clock = new THREE.Clock();
 
     const animate = () => {
+      if (!isVisible) {
+        animationFrameId = 0;
+        return;
+      }
       animationFrameId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
@@ -172,7 +176,30 @@ export function Hero3DCanvas() {
       renderer.render(scene, camera);
     };
 
-    animate();
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible = Boolean(entry?.isIntersecting) && !document.hidden;
+        if (isVisible && !animationFrameId) {
+          clock.start();
+          animate();
+        }
+      },
+      { threshold: 0.05 },
+    );
+    observer.observe(container);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        isVisible = false;
+      } else {
+        isVisible = true;
+        if (!animationFrameId) {
+          clock.start();
+          animate();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     const handleResize = () => {
       if (!container) return;
@@ -184,9 +211,11 @@ export function Hero3DCanvas() {
     window.addEventListener("resize", handleResize);
 
     return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("resize", handleResize);
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       renderer.dispose();
       torusGeometry.dispose();
       goldMaterial.dispose();
@@ -206,8 +235,6 @@ export function Hero3DCanvas() {
   return (
     <div
       ref={containerRef}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className="relative h-[380px] w-full cursor-grab active:cursor-grabbing sm:h-[460px] lg:h-[540px]"
     >
       {/* Subtle overlay badge */}

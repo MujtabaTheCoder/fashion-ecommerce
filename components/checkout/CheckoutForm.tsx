@@ -9,17 +9,12 @@ import {
   Banknote,
   Building2,
   Apple,
-  ShieldCheck,
   Lock,
-  Truck,
-  Sparkles,
   ArrowRight,
-  CheckCircle2,
 } from "lucide-react";
 import { useCart } from "@/lib/cart/CartContext";
 import { useOrders } from "@/lib/orders/OrderContext";
 import { formatMoney } from "@/lib/utils";
-import confetti from "canvas-confetti";
 
 export function CheckoutForm() {
   const router = useRouter();
@@ -87,16 +82,17 @@ export function CheckoutForm() {
       clearCart();
       setIsSubmitting(false);
 
-      try {
-        confetti({
-          particleCount: 80,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ["#dfb15b", "#1a1816", "#10b981"],
-        });
-      } catch {
-        // ignore
-      }
+      import("canvas-confetti")
+        .then((module) => {
+          const confetti = module.default ?? module;
+          confetti({
+            particleCount: 80,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ["#dfb15b", "#1a1816", "#10b981"],
+          });
+        })
+        .catch(() => {});
 
       const cleanNum = order.orderNumber.replace("#", "");
       router.push(`/track-order/${cleanNum}`);
@@ -250,7 +246,7 @@ export function CheckoutForm() {
             ].map((method) => (
               <label
                 key={method.id}
-                onClick={() => setShippingMethod(method.id as any)}
+                onClick={() => setShippingMethod(method.id as "standard" | "express" | "vip")}
                 className={`flex items-center justify-between rounded-2xl border p-4 cursor-pointer transition-all ${
                   shippingMethod === method.id
                     ? "border-ink bg-background ring-1 ring-ink"
@@ -297,7 +293,7 @@ export function CheckoutForm() {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => setPaymentMethod(p.id as any)}
+                  onClick={() => setPaymentMethod(p.id as "card" | "applepay" | "cod" | "bank")}
                   className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-4 transition-all ${
                     paymentMethod === p.id
                       ? "border-ink bg-ink text-background shadow-sm"

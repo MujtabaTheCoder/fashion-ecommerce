@@ -16,24 +16,44 @@ export default function TrackOrderLookupPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
-  const handleLookupSubmit = (e: React.FormEvent) => {
+  const handleLookupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setIsSearching(true);
 
-    setTimeout(() => {
-      const match = lookupOrder(orderNumber, phoneOrEmail);
+    // 1. Fast local session lookup
+    const localMatch = lookupOrder(orderNumber, phoneOrEmail);
+    if (localMatch) {
+      setIsSearching(false);
+      const cleanNum = localMatch.orderNumber.replace(/^#/, "");
+      router.push(`/track-order/${cleanNum}`);
+      return;
+    }
+
+    // 2. High-performance Edge API lookup with rate limiting
+    try {
+      const res = await fetch("/api/orders/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber, phoneOrEmail }),
+      });
+
+      const data = await res.json();
       setIsSearching(false);
 
-      if (match) {
-        const cleanNum = match.orderNumber.replace(/^#/, "");
+      if (res.ok && data?.order_number) {
+        const cleanNum = data.order_number.replace(/^#/, "");
         router.push(`/track-order/${cleanNum}`);
       } else {
         setErrorMsg(
-          `No order found matching "${orderNumber}" with contact "${phoneOrEmail}". Please check your order reference receipt or phone number.`
+          data?.error ||
+            `No order found matching "${orderNumber}". Please verify your order confirmation reference.`,
         );
       }
-    }, 400);
+    } catch {
+      setIsSearching(false);
+      setErrorMsg("Network error. Please try again in a few moments.");
+    }
   };
 
   return (

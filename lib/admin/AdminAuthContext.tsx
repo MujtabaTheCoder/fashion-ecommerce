@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useState, useMemo, useCallback } from "react";
 
 // ── Hardcoded Admin Credentials ──────────────────────────────────────────────
 const ADMIN_USERNAME = "admin";
@@ -16,41 +16,50 @@ type AdminAuthContextType = {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
+function readInitialAuth(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(SESSION_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(readInitialAuth);
 
-  useEffect(() => {
-    setIsMounted(true);
-    try {
-      const session = sessionStorage.getItem(SESSION_KEY);
-      if (session === "true") setIsAuthenticated(true);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const login = (username: string, password: string): boolean => {
+  const login = useCallback((username: string, password: string): boolean => {
     if (
       username.trim().toLowerCase() === ADMIN_USERNAME &&
       password === ADMIN_PASSWORD
     ) {
       setIsAuthenticated(true);
-      try { sessionStorage.setItem(SESSION_KEY, "true"); } catch { /* ignore */ }
+      try {
+        sessionStorage.setItem(SESSION_KEY, "true");
+      } catch {
+        /* ignore */
+      }
       return true;
     }
     return false;
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setIsAuthenticated(false);
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
-  };
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  if (!isMounted) return null;
+  const value = useMemo(
+    () => ({ isAuthenticated, login, logout }),
+    [isAuthenticated, login, logout],
+  );
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AdminAuthContext.Provider value={value}>
       {children}
     </AdminAuthContext.Provider>
   );

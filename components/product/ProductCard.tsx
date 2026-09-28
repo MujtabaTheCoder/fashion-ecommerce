@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Eye, Heart, ShoppingBag, Box, Star } from "lucide-react";
@@ -9,17 +9,25 @@ import { formatMoney } from "@/lib/utils";
 import type { ProductCardData } from "@/types";
 import { Card3DTilt } from "@/components/3d/Card3DTilt";
 import { useCart } from "@/lib/cart/CartContext";
-import { MOCK_PRODUCTS } from "@/lib/data/mockProducts";
+import { useUIModals } from "@/lib/ui/UIModalContext";
+import { useWishlist } from "@/lib/wishlist/WishlistContext";
+import { MOCK_PRODUCTS, type DetailedProduct } from "@/lib/data/mockProducts";
 
 type ProductCardProps = {
   product: ProductCardData;
 };
 
-export function ProductCard({ product }: ProductCardProps) {
-  const { addItem, setQuickViewProduct, setModel3dProduct, toggleWishlist, isWishlisted } =
-    useCart();
+// Static fast lookup map to avoid O(N) array finds on every render
+const PRODUCT_MAP = new Map<string, DetailedProduct>(
+  MOCK_PRODUCTS.map((p) => [p.slug, p]),
+);
 
-  const detailed = MOCK_PRODUCTS.find((p) => p.slug === product.slug) || {
+export const ProductCard = memo(function ProductCard({ product }: ProductCardProps) {
+  const { addItem } = useCart();
+  const { setQuickViewProduct, setModel3dProduct } = useUIModals();
+  const { toggleWishlist, isWishlisted } = useWishlist();
+
+  const detailed = PRODUCT_MAP.get(product.slug) ?? {
     id: product.id,
     slug: product.slug,
     name: product.name,
@@ -190,8 +198,8 @@ export function ProductCard({ product }: ProductCardProps) {
               )}
             </div>
 
-            {/* Colors swatch dots preview */}
-            {detailed.colors.length > 0 && (
+            {/* Colors swatch preview */}
+            {detailed.colors && detailed.colors.length > 0 && (
               <div className="flex items-center -space-x-1">
                 {detailed.colors.slice(0, 3).map((c) => (
                   <span
@@ -207,4 +215,4 @@ export function ProductCard({ product }: ProductCardProps) {
       </article>
     </Card3DTilt>
   );
-}
+});

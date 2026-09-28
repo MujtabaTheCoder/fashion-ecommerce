@@ -2,10 +2,12 @@
 
 import React, { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal, Box, Sparkles, X, Grid3X3, Grid2X2 } from "lucide-react";
-import { MOCK_PRODUCTS, type DetailedProduct, detailedToProductCard } from "@/lib/data/mockProducts";
+import { Search, SlidersHorizontal, Box, X } from "lucide-react";
+import { detailedToProductCard } from "@/lib/data/mockProducts";
 import { useProducts } from "@/lib/products/ProductContext";
 import { ProductCard } from "@/components/product/ProductCard";
+
+type SortOption = "featured" | "price-asc" | "price-desc" | "rating";
 
 export function ShopCatalog() {
   const searchParams = useSearchParams();
@@ -13,7 +15,7 @@ export function ShopCatalog() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
-  const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "rating">("featured");
+  const [sortBy, setSortBy] = useState<SortOption>("featured");
   const [only3D, setOnly3D] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<string>("all");
 
@@ -113,7 +115,7 @@ export function ShopCatalog() {
             <span className="text-muted hidden sm:inline">Sort:</span>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
               className="rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium text-ink focus:outline-none focus:ring-1 focus:ring-ink"
             >
               <option value="featured">Featured Curations</option>

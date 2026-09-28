@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Shirt3DViewer, type ShirtCustomizerState } from "@/components/3d/Shirt3DViewer";
-import { Sparkles, ShoppingBag, Check, ShieldCheck, Scissors, ArrowRight } from "lucide-react";
+import { ShoppingBag, Check, ShieldCheck, Scissors } from "lucide-react";
 import { useCart } from "@/lib/cart/CartContext";
 import { formatMoney } from "@/lib/utils";
 import type { DetailedProduct } from "@/lib/data/mockProducts";
@@ -50,7 +50,7 @@ export function BespokeShirtStudio() {
 
   const handleAddBespokeToBag = () => {
     const bespokeProduct: DetailedProduct = {
-      id: `bespoke-shirt-${Date.now()}`,
+      id: `bespoke-shirt-${state.fabric}-${state.collar}-${state.colorHex.replace("#", "")}`,
       slug: `bespoke-${state.fabric}-shirt`,
       name: `Bespoke 3D ${currentFabric ? currentFabric.name : "Silk"} Shirt`,
       subtitle: `${state.collar.toUpperCase()} collar · ${state.colorName}`,
@@ -126,7 +126,12 @@ export function BespokeShirtStudio() {
                 {FABRICS.map((fabric) => (
                   <button
                     key={fabric.id}
-                    onClick={() => setState((prev) => ({ ...prev, fabric: fabric.id as any }))}
+                    onClick={() =>
+                      setState((prev) => ({
+                        ...prev,
+                        fabric: fabric.id as ShirtCustomizerState["fabric"],
+                      }))
+                    }
                     className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all ${
                       state.fabric === fabric.id
                         ? "border-ink bg-surface shadow-xs ring-1 ring-ink"
@@ -192,7 +197,12 @@ export function BespokeShirtStudio() {
                 {COLLARS.map((collar) => (
                   <button
                     key={collar.id}
-                    onClick={() => setState((prev) => ({ ...prev, collar: collar.id as any }))}
+                    onClick={() =>
+                      setState((prev) => ({
+                        ...prev,
+                        collar: collar.id as ShirtCustomizerState["collar"],
+                      }))
+                    }
                     className={`rounded-xl border p-2.5 text-xs font-medium text-center transition-all ${
                       state.collar === collar.id
                         ? "border-ink bg-ink text-background shadow-xs"

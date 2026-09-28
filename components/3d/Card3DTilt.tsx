@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useEffect } from "react";
 
 type Card3DTiltProps = {
   children: React.ReactNode;
@@ -9,48 +9,73 @@ type Card3DTiltProps = {
   glareOpacity?: number;
 };
 
+/**
+ * 60fps/120fps Hardware-Accelerated 3D Card Tilt.
+ * Uses requestAnimationFrame and direct DOM style mutation to eliminate React re-renders.
+ */
 export function Card3DTilt({
   children,
   className = "",
-  maxTilt = 12,
-  glareOpacity = 0.25,
+  maxTilt = 8,
+  glareOpacity = 0.2,
 }: Card3DTiltProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [transformStyle, setTransformStyle] = useState("");
-  const [glarePosition, setGlarePosition] = useState({ x: 50, y: 50, opacity: 0 });
+  const glareRef = useRef<HTMLDivElement>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const card = cardRef.current;
     if (!card) return;
 
-    const rect = card.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
 
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+    const clientX = e.clientX;
+    const clientY = e.clientY;
 
-    const rotateX = -((y - centerY) / centerY) * maxTilt;
-    const rotateY = ((x - centerX) / centerX) * maxTilt;
+    rafIdRef.current = requestAnimationFrame(() => {
+      const rect = card.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
 
-    setTransformStyle(
-      `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`,
-    );
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
 
-    const glareX = (x / rect.width) * 100;
-    const glareY = (y / rect.height) * 100;
+      const rotateX = -((y - centerY) / centerY) * maxTilt;
+      const rotateY = ((x - centerX) / centerX) * maxTilt;
 
-    setGlarePosition({
-      x: glareX,
-      y: glareY,
-      opacity: glareOpacity,
+      card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
+
+      if (glareRef.current) {
+        const glareX = (x / rect.width) * 100;
+        const glareY = (y / rect.height) * 100;
+        glareRef.current.style.opacity = glareOpacity.toString();
+        glareRef.current.style.background = `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.0) 65%)`;
+      }
     });
   };
 
   const handleMouseLeave = () => {
-    setTransformStyle("perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)");
-    setGlarePosition((prev) => ({ ...prev, opacity: 0 }));
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+    const card = cardRef.current;
+    if (card) {
+      card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)";
+    }
+    if (glareRef.current) {
+      glareRef.current.style.opacity = "0";
+    }
   };
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -58,8 +83,8 @@ export function Card3DTilt({
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{
-        transform: transformStyle,
-        transition: "transform 0.15s ease-out",
+        transform: "perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)",
+        transition: "transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)",
         transformStyle: "preserve-3d",
       }}
       className={`relative will-change-transform ${className}`}
@@ -67,11 +92,8 @@ export function Card3DTilt({
       {children}
       {/* Dynamic 3D Glare Reflection Overlay */}
       <div
-        className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-300"
-        style={{
-          opacity: glarePosition.opacity,
-          background: `radial-gradient(circle at ${glarePosition.x}% ${glarePosition.y}%, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.0) 65%)`,
-        }}
+        ref={glareRef}
+        className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300"
       />
     </div>
   );

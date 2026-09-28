@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles, SlidersHorizontal } from "lucide-react";
-import { MOCK_PRODUCTS, type DetailedProduct, detailedToProductCard } from "@/lib/data/mockProducts";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { detailedToProductCard } from "@/lib/data/mockProducts";
 import { useProducts } from "@/lib/products/ProductContext";
 import { ProductCard } from "@/components/product/ProductCard";
 

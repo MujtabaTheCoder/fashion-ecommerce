@@ -11,6 +11,9 @@ export function formatMoney(
   locale: string = "en-PK",
 ): string {
   const rupees = Math.round(cents / 10);
-  return `Rs. ${rupees.toLocaleString("en-PK")}`;
+  if (currency === "PKR") {
+    return `Rs. ${rupees.toLocaleString(locale)}`;
+  }
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(rupees);
 }
 

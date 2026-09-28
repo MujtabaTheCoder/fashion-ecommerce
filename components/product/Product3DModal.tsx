@@ -3,12 +3,14 @@
 import React from "react";
 import { X, ShoppingBag, Eye } from "lucide-react";
 import { useCart } from "@/lib/cart/CartContext";
+import { useUIModals } from "@/lib/ui/UIModalContext";
 import { Product3DViewer } from "@/components/3d/Product3DViewer";
 import { formatMoney } from "@/lib/utils";
 import Link from "next/link";
 
 export function Product3DModal() {
-  const { model3dProduct, setModel3dProduct, addItem } = useCart();
+  const { model3dProduct, setModel3dProduct } = useUIModals();
+  const { addItem } = useCart();
 
   if (!model3dProduct) return null;
 

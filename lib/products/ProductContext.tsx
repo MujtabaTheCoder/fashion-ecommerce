@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useState, useMemo, useCallback } from "react";
 import { MOCK_PRODUCTS, type DetailedProduct } from "@/lib/data/mockProducts";
 
 type ProductContextType = {
@@ -16,89 +16,99 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 const PRODUCTS_STORAGE_KEY = "atelier_live_outfits_v5";
 
-export function ProductProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<DetailedProduct[]>(MOCK_PRODUCTS);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    try {
-      // Clear old cached product keys from localStorage
-      localStorage.removeItem("atelier_live_products_v2");
-      localStorage.removeItem("atelier_live_products");
-      localStorage.removeItem("atelier_live_products_v1");
-
-      const saved = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // If parsed list has fewer than 12 products (old cache), update with new catalog
-        const womenCount = parsed.filter((p: DetailedProduct) => p.category === "women").length;
-        const menCount = parsed.filter((p: DetailedProduct) => p.category === "men").length;
-
-        if (womenCount >= 6 && menCount >= 6) {
-          setProducts(parsed);
-        } else {
-          setProducts(MOCK_PRODUCTS);
-          localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(MOCK_PRODUCTS));
-        }
-      } else {
-        setProducts(MOCK_PRODUCTS);
-        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(MOCK_PRODUCTS));
+function readInitialProducts(): DetailedProduct[] {
+  if (typeof window === "undefined") return MOCK_PRODUCTS;
+  try {
+    const saved = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const womenCount = parsed.filter((p: DetailedProduct) => p.category === "women").length;
+      const menCount = parsed.filter((p: DetailedProduct) => p.category === "men").length;
+      if (womenCount >= 6 && menCount >= 6) {
+        return parsed;
       }
-    } catch {
-      setProducts(MOCK_PRODUCTS);
     }
+  } catch {
+    // fallback
+  }
+  return MOCK_PRODUCTS;
+}
+
+export function ProductProvider({ children }: { children: React.ReactNode }) {
+  const [products, setProducts] = useState<DetailedProduct[]>(readInitialProducts);
+
+  const addProduct = useCallback(
+    (newProd: Omit<DetailedProduct, "id">) => {
+      const fullProd: DetailedProduct = {
+        ...newProd,
+        id: `prod-${Date.now()}`,
+      };
+      setProducts((prev) => {
+        const next = [fullProd, ...prev];
+        try {
+          localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    },
+    [],
+  );
+
+  const updateProductPrice = useCallback((id: string, newPriceCents: number) => {
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, priceCents: newPriceCents } : p));
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   }, []);
 
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
-    } catch {
-      // ignore
-    }
-  }, [products, isMounted]);
+  const toggleStockStatus = useCallback((id: string) => {
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, inStock: !p.inStock } : p));
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
-  const addProduct = (newProd: Omit<DetailedProduct, "id">) => {
-    const fullProd: DetailedProduct = {
-      ...newProd,
-      id: `prod-${Date.now()}`,
-    };
-    setProducts((prev) => [fullProd, ...prev]);
-  };
+  const deleteProduct = useCallback((id: string) => {
+    setProducts((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
-  const updateProductPrice = (id: string, newPriceCents: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, priceCents: newPriceCents } : p)),
-    );
-  };
-
-  const toggleStockStatus = (id: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, inStock: !p.inStock } : p)),
-    );
-  };
-
-  const deleteProduct = (id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const getProductBySlug = (slug: string) => products.find((p) => p.slug === slug);
-
-  return (
-    <ProductContext.Provider
-      value={{
-        products,
-        addProduct,
-        updateProductPrice,
-        toggleStockStatus,
-        deleteProduct,
-        getProductBySlug,
-      }}
-    >
-      {children}
-    </ProductContext.Provider>
+  const getProductBySlug = useCallback(
+    (slug: string) => products.find((p) => p.slug === slug),
+    [products],
   );
+
+  const value = useMemo(
+    () => ({
+      products,
+      addProduct,
+      updateProductPrice,
+      toggleStockStatus,
+      deleteProduct,
+      getProductBySlug,
+    }),
+    [
+      products,
+      addProduct,
+      updateProductPrice,
+      toggleStockStatus,
+      deleteProduct,
+      getProductBySlug,
+    ],
+  );
+
+  return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>;
 }
 
 export function useProducts() {

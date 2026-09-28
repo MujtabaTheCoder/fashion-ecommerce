@@ -1,7 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getPublicSupabaseClient } from "@/lib/supabase/public";
 import { resolveProductImageUrl } from "@/lib/products/media";
 import type { ProductCardData } from "@/types";
 import { MOCK_PRODUCTS, type DetailedProduct } from "./mockProducts";
+import { globalCache } from "@/lib/cache/inMemoryCache";
+import { dbCircuitBreaker } from "@/lib/cache/circuitBreaker";
 
 type ProductListRow = {
   id: string;
@@ -63,77 +65,111 @@ export function detailedToProductCard(p: DetailedProduct): ProductCardData {
   };
 }
 
+/**
+ * List published products with in-memory SWR caching and circuit breaker protection.
+ * Cache TTL: 60 seconds fresh, 5 minutes stale serving.
+ */
 export async function listPublishedProducts(): Promise<ProductCardData[]> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select(
-        `
-        id,
-        slug,
-        name,
-        product_images ( storage_path, alt, is_primary, sort_order ),
-        product_variants ( price_cents, compare_at_cents, is_active )
-      `,
-      )
-      .eq("status", "published")
-      .order("name", { ascending: true });
+  const cacheKey = "catalog:published_products";
 
-    if (!error && data && data.length > 0) {
-      return (data as ProductListRow[]).map(toProductCard);
-    }
-  } catch {
-    // Fall back gracefully to mock catalog
-  }
+  return globalCache.swr(
+    cacheKey,
+    async () => {
+      return dbCircuitBreaker.execute(
+        async () => {
+          const supabase = getPublicSupabaseClient();
+          if (!supabase) {
+            return MOCK_PRODUCTS.map(detailedToProductCard);
+          }
 
-  return MOCK_PRODUCTS.map(detailedToProductCard);
+          const { data, error } = await supabase
+            .from("products")
+            .select(
+              `
+              id,
+              slug,
+              name,
+              product_images ( storage_path, alt, is_primary, sort_order ),
+              product_variants ( price_cents, compare_at_cents, is_active )
+            `,
+            )
+            .eq("status", "published")
+            .order("name", { ascending: true })
+            .limit(100);
+
+          if (!error && data && data.length > 0) {
+            return (data as unknown as ProductListRow[]).map(toProductCard);
+          }
+
+          return MOCK_PRODUCTS.map(detailedToProductCard);
+        },
+        () => MOCK_PRODUCTS.map(detailedToProductCard),
+      );
+    },
+    60_000,
+    300_000,
+  );
 }
 
+/**
+ * Fetch a single product by slug with micro-caching and fallback.
+ */
 export async function getProductBySlug(slug: string): Promise<DetailedProduct | null> {
   const match = MOCK_PRODUCTS.find((p) => p.slug === slug);
   if (match) return match;
 
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .eq("slug", slug)
-      .single();
+  const cacheKey = `product:slug:${slug}`;
 
-    if (data) {
-      return {
-        id: data.id,
-        slug: data.slug,
-        name: data.name,
-        subtitle: data.description?.slice(0, 60) || "Haute Couture Piece",
-        category: "women",
-        categoryLabel: "Collection",
-        priceCents: 45000,
-        compareAtCents: null,
-        rating: 4.9,
-        reviewsCount: 12,
-        images: [
-          {
-            src: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?q=80&w=1200&auto=format&fit=crop",
-            alt: data.name,
-          },
-        ],
-        description: data.description || "Architectural silhouette crafted with pure intention.",
-        material: data.material || "100% Fine Fabric",
-        careInstructions: data.care_instructions || "Dry clean only.",
-        details: ["Hand finished details", "Editorial tailoring"],
-        colors: [{ name: "Default", hex: "#111111" }],
-        sizes: ["XS", "S", "M", "L"],
-        model3dType: "ring",
-        inStock: true,
-        isFeatured: true,
-      };
-    }
-  } catch {
-    // No-op
-  }
+  return globalCache.swr(
+    cacheKey,
+    async () => {
+      return dbCircuitBreaker.execute(
+        async () => {
+          const supabase = getPublicSupabaseClient();
+          if (!supabase) return null;
 
-  return null;
+          const { data, error } = await supabase
+            .from("products")
+            .select("id, slug, name, description, material, care_instructions")
+            .eq("slug", slug)
+            .maybeSingle();
+
+          if (!error && data) {
+            return {
+              id: data.id,
+              slug: data.slug,
+              name: data.name,
+              subtitle: data.description?.slice(0, 60) || "Haute Couture Piece",
+              category: "women" as const,
+              categoryLabel: "Collection",
+              priceCents: 45000,
+              compareAtCents: null,
+              rating: 4.9,
+              reviewsCount: 12,
+              images: [
+                {
+                  src: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?q=80&w=1200&auto=format&fit=crop",
+                  alt: data.name,
+                },
+              ],
+              description: data.description || "Architectural silhouette crafted with pure intention.",
+              material: data.material || "100% Fine Fabric",
+              careInstructions: data.care_instructions || "Dry clean only.",
+              details: ["Hand finished details", "Editorial tailoring"],
+              colors: [{ name: "Default", hex: "#111111" }],
+              sizes: ["XS", "S", "M", "L"],
+              model3dType: "ring" as const,
+              inStock: true,
+              isFeatured: true,
+            };
+          }
+
+          return null;
+        },
+        () => null,
+      );
+    },
+    60_000,
+    300_000,
+  );
 }

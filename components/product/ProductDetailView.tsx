@@ -16,7 +16,6 @@ import {
   Check,
   ChevronDown,
   ArrowLeft,
-  Share2,
 } from "lucide-react";
 import { MOCK_PRODUCTS, type DetailedProduct, detailedToProductCard } from "@/lib/data/mockProducts";
 import { formatMoney } from "@/lib/utils";
@@ -255,7 +254,28 @@ export function ProductDetailView({ product }: { product: DetailedProduct }) {
 
             {/* Quantity and Actions */}
             <div className="mt-8 flex flex-col gap-3">
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                {/* Quantity Stepper */}
+                <div className="flex items-center rounded-full border border-border bg-surface px-3 py-2 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="px-2 text-muted hover:text-ink transition-colors"
+                    aria-label="Decrease quantity"
+                  >
+                    -
+                  </button>
+                  <span className="w-7 text-center font-mono text-ink">{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.min(10, q + 1))}
+                    className="px-2 text-muted hover:text-ink transition-colors"
+                    aria-label="Increase quantity"
+                  >
+                    +
+                  </button>
+                </div>
+
                 <button
                   onClick={() =>
                     addItem(product, {

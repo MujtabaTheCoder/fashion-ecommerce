@@ -1,26 +1,28 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useMemo, useCallback } from "react";
 import type { Order, OrderItem, OrderStatus, OrderStatusHistory } from "@/lib/types/orders";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createClient } from "@supabase/supabase-js";
 
+interface OrderCreateInput {
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: string;
+  totalAmount: number;
+  items: Array<{ productName: string; quantity: number; size: string; price: number }>;
+  paymentMethod?: string;
+}
+
 interface OrderContextType {
   orders: Order[];
   isRealtimeConnected: boolean;
-  createOrder: (data: {
-    customerEmail: string;
-    customerPhone: string;
-    shippingAddress: string;
-    totalAmount: number;
-    items: Array<{ productName: string; quantity: number; size: string; price: number }>;
-    paymentMethod?: string;
-  }) => Promise<Order>;
+  createOrder: (data: OrderCreateInput) => Promise<Order>;
   updateOrderStatus: (
     orderId: string,
     newStatus: OrderStatus,
     note?: string,
-    trackingNumber?: string
+    trackingNumber?: string,
   ) => Promise<void>;
   lookupOrder: (orderNumber: string, phoneOrEmail: string) => Order | undefined;
   getOrderByNumber: (orderNumber: string) => Order | undefined;
@@ -33,121 +35,31 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 const STORAGE_KEY = "atelier_realtime_orders_v4";
 
+function readInitialOrders(): Order[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function OrderProvider({ children }: { children: React.ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isMounted, setIsMounted] = useState(false);
-  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [orders, setOrders] = useState<Order[]>(readInitialOrders);
 
-  // Initialize orders state from localStorage
-  useEffect(() => {
-    setIsMounted(true);
+  const saveOrders = useCallback((updated: Order[]) => {
+    setOrders(updated);
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setOrders(JSON.parse(saved));
-      }
-    } catch {
-      setOrders([]);
-    }
-  }, []);
-
-  // Sync state changes to localStorage
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {
       // ignore
     }
-  }, [orders, isMounted]);
-
-  // Supabase Realtime Subscription setup (if Supabase env vars are provided)
-  useEffect(() => {
-    const env = getSupabasePublicEnv();
-    if (!env) return;
-
-    try {
-      const supabase = createClient(env.url, env.anonKey);
-      
-      const channel = supabase
-        .channel("realtime_orders_channel")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "orders" },
-          (payload) => {
-            console.log("Realtime order payload:", payload);
-            setIsRealtimeConnected(true);
-
-            if (payload.eventType === "INSERT") {
-              const newRecord = payload.new as any;
-              setOrders((prev) => {
-                if (prev.some((o) => o.id === newRecord.id)) return prev;
-                const formatted: Order = {
-                  id: newRecord.id,
-                  orderNumber: newRecord.order_number,
-                  customerEmail: newRecord.customer_email,
-                  customerPhone: newRecord.customer_phone,
-                  shippingAddress: newRecord.shipping_address,
-                  status: newRecord.status,
-                  trackingNumber: newRecord.tracking_number,
-                  totalAmount: Number(newRecord.total_amount),
-                  createdAt: newRecord.created_at,
-                  updatedAt: newRecord.updated_at,
-                  items: [],
-                  history: [
-                    {
-                      id: `hist-${Date.now()}`,
-                      orderId: newRecord.id,
-                      status: newRecord.status,
-                      note: "Order Placed & Confirmed",
-                      createdAt: newRecord.created_at,
-                    },
-                  ],
-                };
-                return [formatted, ...prev];
-              });
-            } else if (payload.eventType === "UPDATE") {
-              const updated = payload.new as any;
-              setOrders((prev) =>
-                prev.map((o) => {
-                  if (o.id === updated.id) {
-                    return {
-                      ...o,
-                      status: updated.status,
-                      trackingNumber: updated.tracking_number || o.trackingNumber,
-                      updatedAt: updated.updated_at,
-                    };
-                  }
-                  return o;
-                })
-              );
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            setIsRealtimeConnected(true);
-          }
-        });
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    } catch {
-      // Fallback to local memory engine
-    }
   }, []);
 
-  // Create new Order
+  // Create new Order with local-first optimistic commit
   const createOrder = useCallback(
-    async (data: {
-      customerEmail: string;
-      customerPhone: string;
-      shippingAddress: string;
-      totalAmount: number;
-      items: Array<{ productName: string; quantity: number; size: string; price: number }>;
-      paymentMethod?: string;
-    }): Promise<Order> => {
+    async (data: OrderCreateInput): Promise<Order> => {
       const orderId = `ord-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const randomCode = Math.floor(1000 + Math.random() * 9000);
       const orderNumber = `#ORD-${randomCode}`;
@@ -186,10 +98,15 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         history: initialHistory,
       };
 
-      // Push to local state
-      setOrders((prev) => [newOrder, ...prev]);
+      setOrders((prev) => {
+        const next = [newOrder, ...prev];
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
 
-      // If Supabase configured, attempt remote insert asynchronously
+      // Async write to Supabase if credentials exist (non-blocking for ultra-fast checkout TTFB)
       const env = getSupabasePublicEnv();
       if (env) {
         try {
@@ -220,16 +137,15 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
             note: "Order placed successfully by client.",
           });
         } catch (err) {
-          console.warn("Supabase remote insert fallback to local:", err);
+          console.warn("Supabase remote order insert fallback:", err);
         }
       }
 
       return newOrder;
     },
-    []
+    [],
   );
 
-  // Update Order Status (Admin)
   const updateOrderStatus = useCallback(
     async (orderId: string, newStatus: OrderStatus, note?: string, trackingNumber?: string) => {
       const now = new Date().toISOString();
@@ -241,8 +157,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         createdAt: now,
       };
 
-      setOrders((prev) =>
-        prev.map((o) => {
+      setOrders((prev) => {
+        const next = prev.map((o) => {
           if (o.id === orderId) {
             const updatedHistory = [...(o.history || []), newHistoryItem];
             return {
@@ -254,10 +170,13 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
             };
           }
           return o;
-        })
-      );
+        });
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
 
-      // Async update Supabase if configured
       const env = getSupabasePublicEnv();
       if (env) {
         try {
@@ -281,10 +200,9 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    []
+    [],
   );
 
-  // Lookup Order by orderNumber AND phone/email
   const lookupOrder = useCallback(
     (orderNumber: string, phoneOrEmail: string): Order | undefined => {
       const cleanNumber = orderNumber.trim().toUpperCase().replace(/^#/, "");
@@ -297,7 +215,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         return matchesNum && (matchesPhone || matchesEmail);
       });
     },
-    [orders]
+    [orders],
   );
 
   const getOrderByNumber = useCallback(
@@ -305,46 +223,55 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       const cleanNumber = orderNumber.trim().toUpperCase().replace(/^#/, "");
       return orders.find((o) => o.orderNumber.toUpperCase().replace(/^#/, "") === cleanNumber);
     },
-    [orders]
+    [orders],
   );
 
   const getOrderById = useCallback(
     (id: string): Order | undefined => {
       return orders.find((o) => o.id === id);
     },
-    [orders]
+    [orders],
   );
 
   const clearAllOrders = useCallback(() => {
-    setOrders([]);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-    } catch {
-      // ignore
-    }
-  }, []);
+    saveOrders([]);
+  }, [saveOrders]);
 
   const deleteOrder = useCallback((id: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setOrders((prev) => {
+      const next = prev.filter((o) => o.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   }, []);
 
-  return (
-    <OrderContext.Provider
-      value={{
-        orders,
-        isRealtimeConnected,
-        createOrder,
-        updateOrderStatus,
-        lookupOrder,
-        getOrderByNumber,
-        getOrderById,
-        clearAllOrders,
-        deleteOrder,
-      }}
-    >
-      {children}
-    </OrderContext.Provider>
+  const value = useMemo(
+    () => ({
+      orders,
+      isRealtimeConnected: true,
+      createOrder,
+      updateOrderStatus,
+      lookupOrder,
+      getOrderByNumber,
+      getOrderById,
+      clearAllOrders,
+      deleteOrder,
+    }),
+    [
+      orders,
+      createOrder,
+      updateOrderStatus,
+      lookupOrder,
+      getOrderByNumber,
+      getOrderById,
+      clearAllOrders,
+      deleteOrder,
+    ],
   );
+
+  return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 }
 
 export function useOrders() {

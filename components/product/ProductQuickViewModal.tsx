@@ -3,12 +3,14 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { X, ShoppingBag, Sparkles, Check, Star, ShieldCheck, Box } from "lucide-react";
+import { X, ShoppingBag, Check, Star, ShieldCheck, Box } from "lucide-react";
 import { useCart } from "@/lib/cart/CartContext";
+import { useUIModals } from "@/lib/ui/UIModalContext";
 import { formatMoney } from "@/lib/utils";
 
 export function ProductQuickViewModal() {
-  const { quickViewProduct, setQuickViewProduct, addItem, setModel3dProduct } = useCart();
+  const { quickViewProduct, setQuickViewProduct, setModel3dProduct } = useUIModals();
+  const { addItem } = useCart();
   const [selectedImgIndex, setSelectedImgIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string>("");
   const [selectedSize, setSelectedSize] = useState<string>("");
